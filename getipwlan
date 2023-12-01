@@ -1,0 +1,5 @@
+#!/usr/bin/python3
+import netifaces
+addrs = netifaces.ifaddresses('wlan0')
+a = addrs[netifaces.AF_INET]
+print(a[0]['addr'])

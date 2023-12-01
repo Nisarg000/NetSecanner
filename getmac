@@ -1,0 +1,79 @@
+#!/bin/bash
+declare -i err=4
+declare -i ifupeth=0
+declare -i ifupwlan=0
+ifupeth=$(getipeth 2> /dev/null | grep "." | wc -l)
+ifupwlan=$(getipwlan 2> /dev/null | grep "." | wc -l)
+if [[ $ifupeth == 0 && $ifupwlan == 0 ]]; then
+	>&2 echo "Error: Both interfaces are down"
+	exit
+fi
+
+echo "This script can only be used for /24 subnets."
+echo "You might get errors or incorrect output if used in any other subnet."
+
+iface=$1
+: '
+until ((false)) 
+        do
+	read -p "Wifi or Ethernet?: " iface
+	if [[ $iface != 'wifi' && $iface != 'Wifi' && $iface != 'Ethernet' && $iface != 'ethernet' && $iface != 'eth' && $iface != 'eth0' && $iface != 'wlan' && $iface != 'wlan0' ]]; then
+	>&2 echo "Error: Invalid interface, try again"
+	err=err-1
+	if [[ $err == 0 ]]; then
+		echo
+		>&2 echo "Too many errors"
+		exit
+	fi
+        continue
+	fi
+	break
+done
+'
+if [[ $iface == 'Ethernet' || $iface == 'ethernet' || $iface == 'eth' || $iface == 'eth0' ]]; then
+	if [[ $ifupeth == 0 ]]; then
+		echo
+		>&2 echo "Interface is down"
+		exit
+	fi
+	q=$(getipeth 2> /dev/null | cut -d "." -f 1)
+	w=$(getipeth 2> /dev/null | cut -d "." -f 2)
+	e=$(getipeth 2> /dev/null | cut -d "." -f 3)
+
+elif [[ $iface == 'wifi' || $iface == 'Wifi' || $iface == 'wlan' || $iface == 'eth0' ]]; then
+	if [[ $ifupwlan == 0 ]]; then
+		echo
+		>&2 echo "Interface is down"
+		exit
+	fi
+	q=$(getipwlan 2> /dev/null | cut -d "." -f 1)
+	w=$(getipwlan 2> /dev/null | cut -d "." -f 2)
+	e=$(getipwlan 2> /dev/null | cut -d "." -f 3)
+fi
+
+ip -s -s neigh flush all &> /dev/null
+
+for ((i=1;i<=254;i++))
+	do
+        ping -c 1 $q.$w.$e.$i &> /dev/null &
+	done
+for ((j=7;j>=0;j--))
+	do
+        	sleep 1
+		echo "Results in $j"
+	done
+
+touch ~/.macoutput.txt 
+
+arp -na | cut -d " " -f 2,4 | tr -d '()' > ~/.macoutput.txt
+
+echo "Here are all the mac addresses of your network:"
+
+grep -v "incomplete" ~/.macoutput.txt | sort -n
+
+alive=$(grep -v "incomplete" ~/.macoutput.txt | sort -n | wc -l)
+
+echo
+echo "$alive hosts are alive in your network"
+
+rm ~/.macoutput.txt
